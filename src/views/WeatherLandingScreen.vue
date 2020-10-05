@@ -47,7 +47,7 @@
       <!-- <line-chart height="500px"  :discrete="true" :round="2" :zeros="true" :data="labelsX" ></line-chart> -->
       <!-- <canvas id="myChart"></canvas> -->
       <div class="card d-flex justify-between">
-        <div class="big-font">26&#xb0;C</div>
+        <div class="big-font">{{ detailCardDetails.temp.day | degrees}}&#xb0;C</div>
         <div>
           <img
             src="../assets/sun.svg"
