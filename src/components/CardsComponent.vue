@@ -1,6 +1,6 @@
 <template>
 <div class="d-flex">
-	<div v-for="(item,index) in data" :key="index" :class="{ active: activeCard[index] }" @click="activateCard(index); $emit('card-changed',item)" class="scroll-card" >
+	<div v-for="(item,index) in data" :key="index" :class="{ active: activeCard[index] }" @click="activateCard(index); $emit('card-changed',item, index)" class="scroll-card" >
 			<div class="bold day">
 				{{item.dt | formatDate}}
 			</div>
@@ -64,9 +64,10 @@ export default {
 
 <style lang="less">
 	.scroll-card {
-		width: 100px;
+		width: 90px;
 		// margin-right: 40px;
 		margin-bottom: 20px;
+		margin-right: 10px;
 		text-align: center;
 		padding: 15px 0;
 		.day {
@@ -88,6 +89,8 @@ export default {
 	}
 	.active {
 		border: 2px solid #00a6fa;
-		border-radius: 4px;
+		background: #ffffda52;
+		transition: all 0.2s;
+		transition-timing-function: cubic-bezier(0, 0, 0.71, 1.18);
 	}
 </style>

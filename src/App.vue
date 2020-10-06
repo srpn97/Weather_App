@@ -7,10 +7,16 @@
 
 <style lang="less">
 #app {
-  font-family: "Roboto";
+  font-family: "Open Sans";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
+}
+input{
+  padding:5px;
+  font-size:14px;
+  font-weight: 700;
+  font-family:'Open Sans';    
 }
 
 #nav {

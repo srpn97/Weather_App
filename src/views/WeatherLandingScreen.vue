@@ -24,7 +24,7 @@
         <SearchDropComponent
           v-show="showDropDown"
           @chosen-city="refreshData"
-          v-if="filteredData.length > 0 && filteredData.length < 12"
+          v-if="filteredData.length > 0 && searchContent.length > 3"
           :data="filteredData"
         />
       </transition>
@@ -33,10 +33,20 @@
       <CardsComponent @card-changed="changeDetails" :data="dailyWeather" />
     </div>
     <div class="details-card">
+      <div v-if="detailCardDetails.hasOwnProperty('clouds')" class="card d-flex">
+        <div class="big-font">{{ detailCardDetails.temp.day | degrees}}&#xb0;C</div>
+        <div>
+          <img v-if="detailCardDetails.weather[0].main === 'Clear'" class="card-img" src="../assets/sun.svg" alt="icon">
+          <img v-else-if="detailCardDetails.weather[0].main === 'Clouds'" class="card-img" src="../assets/cloudy.svg" alt="icon">
+          <img v-else-if="detailCardDetails.weather[0].main === 'Rain'" class="card-img" src="../assets/rain.svg" alt="icon">
+          <img v-else class="card-img" src="../assets/cloudy.svg" alt="icon">
+        </div>
+      </div>
       <div class="graph-scroll">
         <div class="graph">
           <GraphComponent
-            v-if="temperatures.length > 1"
+            height="150px"
+            v-if="showGraph"
             :chartData="temperatures"
             :options="chartOptions"
             :chartColors="positiveChartColors"
@@ -44,38 +54,24 @@
           />
         </div>
       </div>
-      <!-- <line-chart height="500px"  :discrete="true" :round="2" :zeros="true" :data="labelsX" ></line-chart> -->
-      <!-- <canvas id="myChart"></canvas> -->
-      <div class="card d-flex justify-between">
-        <div class="big-font">{{ detailCardDetails.temp.day | degrees}}&#xb0;C</div>
-        <div>
-          <img
-            src="../assets/sun.svg"
-            height="70"
-            width="70"
-            class="card-img"
-            alt=""
-          />
-        </div>
-      </div>
       <div class="d-flex justify-between">
         <div class="pressure-card">
           <div class="bold">Pressure</div>
-          <div>{{ detailCardDetails.pressure }} hpa</div>
+          <div class="subtext">{{ detailCardDetails.pressure }} hpa</div>
         </div>
         <div class="humidity-card">
           <div class="bold">Humidity</div>
-          <div>{{ detailCardDetails.humidity }} %</div>
+          <div class="subtext">{{ detailCardDetails.humidity }} %</div>
         </div>
       </div>
       <div class="d-flex justify-between">
         <div class="sunrise-card">
           <div class="bold">Sunrise</div>
-          <div>{{ detailCardDetails.sunrise | formatDate }}</div>
+          <div class="subtext">{{ detailCardDetails.sunrise | formatDate }}</div>
         </div>
         <div class="sunset-card">
           <div class="bold">Sunset</div>
-          <div>{{ detailCardDetails.sunset | formatDate }}</div>
+          <div class="subtext">{{ detailCardDetails.sunset | formatDate }}</div>
         </div>
       </div>
     </div>
@@ -93,6 +89,7 @@ import CardsComponent from "@/components/CardsComponent.vue";
 import GraphComponent from "@/components/GraphComponent.vue";
 import axios from "axios";
 import moment from "moment";
+import Chart from 'chart.js'
 import cities from "cities.json";
 
 export default {
@@ -106,7 +103,7 @@ export default {
   filters: {
     formatDate(value) {
       if (value !== null) {
-        return moment.unix(value).format("hh:mm A");
+        return moment.unix(value).format("h:mm A");
       } else {
         return "-";
       }
@@ -118,6 +115,7 @@ export default {
   data: function () {
     return {
       isLoading: false,
+      showGraph: false,
       searchContent: "",
       showDropDown: false,
       dailyWeather: [],
@@ -126,6 +124,7 @@ export default {
       limit: 5,
       activeCard: [],
       temperatures: [],
+      hourlyData: [],
       positiveChartColors: {
         borderColor: "#00a6fa",
         pointBorderColor: "#00a6fa",
@@ -136,23 +135,38 @@ export default {
         maintainAspectRatio: false,
         scaleShowVerticalLines: false,
         legend: {
-            display: false
+            display: false,
+            lables: {
+            fontStyle: "bold",
+        },
          },
         scales: {
             yAxes: [{
+                stacked: true,
                 gridLines : {
                     display: false,
                     drawOnChartArea: false,
                     drawTicks: false,
                     drawBorder: false,
+                    lineWidth: 3,
                 },
                 ticks: {
                     display: false,
                     min: 0,
                     max: 50,
                     maxTicksLimit: 2,
-                    beginAtZero: true,
+                    beginAtZero: false,
                 }
+            }],
+            xAxes: [{
+              gridLines : {
+                  lineWidth: 2,
+                  drawBorder: false,
+                },
+              ticks: {
+                autoSkip : false,
+                padding: 15
+              }
             }]
         }
       },
@@ -161,6 +175,7 @@ export default {
     };
   },
   created() {
+    Chart.defaults.global.defaultFontStyle = 'Bold'
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((pos) => {
         this.getLocation(pos.coords.latitude, pos.coords.longitude);
@@ -171,9 +186,11 @@ export default {
   },
   methods: {
     filterCities() {
-      this.filteredData = this.citiesList.filter((x) =>
-        x.name.toLowerCase().includes(this.searchContent.toLowerCase())
-      );
+      if(this.searchContent.length > 3) {
+        this.filteredData = this.citiesList.filter((x) =>
+          x.name.toLowerCase().includes(this.searchContent.toLowerCase())
+        );
+      }
     },
     focusOnSearch() {
       var ele = document.getElementById('searchBox');
@@ -189,11 +206,43 @@ export default {
       this.getLocation(value.lat, value.lng);
       this.showDropDown = false;
     },
-    changeDetails(value) {
+    changeDetails(value, index) {
+      console.log(value,index)
       this.detailCardDetails = value;
+      if(index === 1) {
+        this.showGraph = false;
+        this.temperatures = [];
+        var p = this.hourlyData.forEach((x,i)=> {
+          if(i>23) {
+            var str = Math.round(x.temp)
+            const date = [str+String.fromCharCode(176), moment.unix(x.dt).format("h A")];
+            this.temperatures.push({ date, temps: x.temp });
+          }
+        })
+        Promise.resolve(p).then(()=> {
+          this.showGraph = true;
+        })
+        console.log(this.temperatures, this.hourlyData)
+      } else {
+        this.showGraph = false;
+        this.temperatures = [];
+        var p = this.hourlyData.forEach((x,i)=> {
+          if(i<=23) {
+            var str = Math.round(x.temp)
+            const date = [str+String.fromCharCode(176), moment.unix(x.dt).format("h A")];
+            this.temperatures.push({ date, temps: x.temp });
+          }
+        })
+        Promise.resolve(p).then(()=> {
+          this.showGraph = true;
+        })
+        console.log(this.temperatures, this.hourlyData)
+      }
     },
     getLocation(lat, lon) {
       this.isLoading = true;
+      this.showGraph = false;
+      this.temperatures = [];
       this.lat = lat;
       this.long = lon;
       axios
@@ -219,19 +268,23 @@ export default {
             lon: this.long,
             units: "metric",
             exclude: "minutely",
-            appid: "45c00ecef902587f86780c4672fbfc3b",
+            appid: "6e872774bbde62797dc8511bccc9c135",
           },
         })
         .then((res) => {
           this.dailyWeather = res.data.daily;
           this.detailCardDetails = res.data.daily[0];
+          this.hourlyData = res.data.hourly;
           res.data.hourly.forEach((x, i) => {
-            if (i < 23) {
-              const date = moment.unix(x.dt).format("hh:mm A");
+            if (i <= 23) {
+              // +
+              var str = Math.round(x.temp)
+              const date = [str+String.fromCharCode(176), moment.unix(x.dt).format("h A")];
               this.temperatures.push({ date, temps: x.temp });
             }
           });
           this.isLoading = false;
+          this.showGraph = true;
         })
         .catch(function (error) {
           console.log(error);
@@ -291,8 +344,8 @@ export default {
   }
   .location-pin {
     position: absolute;
-    height: 30px;
-    width: 30px;
+    height: 22px;
+    width: 22px;
     left: 1rem;
   }
 }
@@ -308,55 +361,56 @@ export default {
   border: 1px solid black;
 }
 .big-font {
-  font-size: 30pt;
+  font-size: 36pt;
   align-self: center;
-  margin-left: 20px;
+  font-weight: 900;
 }
 .details-card {
   .graph-scroll {
     overflow-x: auto;
+    overflow-y: visible;
+    width: 98%;
+    margin-top: 30px;
     .graph {
       width: 1500px;
     }
   }
   .card {
-    margin-top: 30px;
+    // margin-top: 30px;
   }
   border-radius: 8px;
   box-shadow: 0px 3px 15px rgba(0, 0, 0, 0.2);
-  padding: 15px 0;
+  padding: 15px 25px;
   @media @large-devices, @extra-large {
     justify-self: center;
     width: 50%;
     margin: auto;
   }
   .card-img {
-    margin-right: 20px;
+    margin-left: 20px;
+    height: 60px;
     align-self: center;
   }
   .pressure-card {
     margin-top: 20px;
-    margin-left: 20px;
     align-self: center;
     text-align: left;
-    background: #48c0e469;
-    padding: 5px 5px;
+    background: #c7f2ff69;
+    padding: 8px;
     width: 40%;
     border-radius: 4px;
   }
   .humidity-card {
     margin-top: 20px;
-    margin-right: 20px;
     align-self: center;
     text-align: left;
-    background: #48c0e469;
-    padding: 5px 5px;
+    background: #c7f2ff69;
+    padding: 8px;
     width: 40%;
     border-radius: 4px;
   }
   .sunrise-card {
     margin-top: 20px;
-    margin-left: 20px;
     align-self: center;
     text-align: left;
     padding: 5px 5px;
@@ -365,12 +419,14 @@ export default {
   }
   .sunset-card {
     margin-top: 20px;
-    margin-right: 20px;
     align-self: center;
-    text-align: left;
+    text-align: right;
     padding: 5px 5px;
     width: 40%;
     border-radius: 4px;
+  }
+  .subtext {
+    font-size: 14px;
   }
 }
 .dropdown-enter-active,
